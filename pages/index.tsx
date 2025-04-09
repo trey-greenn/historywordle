@@ -1,112 +1,326 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+import { useState, useEffect } from 'react';
+import Head from 'next/head';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Dummy data for historical figures
+const dummyFigures = [
+  { name: "Napoleon Bonaparte", era: "19th Century", nationality: "French", yearBorn: 1769, yearDied: 1821, field: "Military" },
+  { name: "Albert Einstein", era: "20th Century", nationality: "German", yearBorn: 1879, yearDied: 1955, field: "Science" },
+  { name: "Marie Curie", era: "20th Century", nationality: "Polish", yearBorn: 1867, yearDied: 1934, field: "Science" },
+  { name: "Abraham Lincoln", era: "19th Century", nationality: "American", yearBorn: 1809, yearDied: 1865, field: "Politics" },
+  { name: "Winston Churchill", era: "20th Century", nationality: "British", yearBorn: 1874, yearDied: 1965, field: "Politics" },
+  { name: "Cleopatra", era: "Ancient", nationality: "Egyptian", yearBorn: -69, yearDied: -30, field: "Royalty" },
+  { name: "Leonardo da Vinci", era: "Renaissance", nationality: "Italian", yearBorn: 1452, yearDied: 1519, field: "Art" },
+  { name: "Mahatma Gandhi", era: "20th Century", nationality: "Indian", yearBorn: 1869, yearDied: 1948, field: "Politics" },
+  { name: "Alexander the Great", era: "Ancient", nationality: "Macedonian", yearBorn: -356, yearDied: -323, field: "Military" },
+  { name: "Queen Victoria", era: "19th Century", nationality: "British", yearBorn: 1819, yearDied: 1901, field: "Royalty" },
+];
+
+// Game state interface
+interface GameState {
+  mysteryFigure: typeof dummyFigures[0] | null;
+  guesses: typeof dummyFigures[0][];
+  gameOver: boolean;
+  won: boolean;
+  gaveUp: boolean;
+  loading: boolean;
+  maxGuesses: number;
+}
 
 export default function Home() {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredFigures, setFilteredFigures] = useState<typeof dummyFigures>([]);
+  const [showInstructions, setShowInstructions] = useState(true);
+  const [gameState, setGameState] = useState<GameState>({
+    mysteryFigure: null,
+    guesses: [],
+    gameOver: false,
+    won: false,
+    gaveUp: false,
+    loading: true,
+    maxGuesses: 8
+  });
+
+  // Initialize game on component mount
+  useEffect(() => {
+    // Select a random figure as the mystery figure
+    const randomIndex = Math.floor(Math.random() * dummyFigures.length);
+    setGameState(prev => ({
+      ...prev,
+      mysteryFigure: dummyFigures[randomIndex],
+      loading: false
+    }));
+    
+    // Check if user has played before
+    const hasPlayed = localStorage.getItem('historyWordleHasPlayed');
+    if (hasPlayed) {
+      setShowInstructions(false);
+    } else {
+      localStorage.setItem('historyWordleHasPlayed', 'true');
+    }
+  }, []);
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const term = e.target.value;
+    setSearchTerm(term);
+    
+    if (term.length > 0) {
+      const filtered = dummyFigures.filter(figure => 
+        figure.name.toLowerCase().includes(term.toLowerCase()) &&
+        !gameState.guesses.some(guess => guess.name === figure.name)
+      );
+      setFilteredFigures(filtered);
+    } else {
+      setFilteredFigures([]);
+    }
+  };
+
+  // Handle figure selection
+  const selectFigure = (figure: typeof dummyFigures[0]) => {
+    setSearchTerm('');
+    setFilteredFigures([]);
+    
+    // Check if figure is already guessed
+    if (gameState.guesses.some(guess => guess.name === figure.name)) {
+      return;
+    }
+    
+    // Check if figure is the mystery figure
+    const isCorrect = figure.name === gameState.mysteryFigure?.name;
+    
+    const newGuesses = [...gameState.guesses, figure];
+    
+    setGameState(prev => ({
+      ...prev,
+      guesses: newGuesses,
+      gameOver: isCorrect || newGuesses.length >= prev.maxGuesses,
+      won: isCorrect
+    }));
+  };
+  // Handle give up
+  const handleGiveUp = () => {
+    setGameState(prev => ({
+      ...prev,
+      gameOver: true,
+      gaveUp: true
+    }));
+  };
+
+  // Handle new game
+  const handleNewGame = () => {
+    const randomIndex = Math.floor(Math.random() * dummyFigures.length);
+    setGameState(prev => ({
+      ...prev,
+      mysteryFigure: dummyFigures[randomIndex],
+      guesses: [],
+      gameOver: false,
+      won: false,
+      gaveUp: false,
+      loading: false,
+      maxGuesses: 8
+    }));
+  };
+
+ // Check if a property matches the mystery figure
+ const isMatch = (guess: typeof dummyFigures[0], property: keyof typeof dummyFigures[0]) => {
+  if (!gameState.mysteryFigure) return false;
+  return guess[property] === gameState.mysteryFigure[property];
+};
+
+// Get directional hint for numeric values
+const getDirectionalHint = (guess: typeof dummyFigures[0], property: 'yearBorn' | 'yearDied') => {
+  if (!gameState.mysteryFigure) return null;
+  
+  if (guess[property] === gameState.mysteryFigure[property]) {
+    return null;
+  }
+  
+  if (guess[property] < gameState.mysteryFigure[property]) {
+    return <span className={`directionalHint higher`}>↑</span>;
+  } else {
+    return <span className={`directionalHint lower`}>↓</span>;
+  }
+};
+
+// Share results
+const shareResults = () => {
+  if (!gameState.mysteryFigure) return;
+  
+  let shareText = `History Wordle - ${gameState.mysteryFigure.name}\n`;
+  shareText += gameState.won ? `I got it in ${gameState.guesses.length}/${gameState.maxGuesses} guesses!` : 'I gave up!';
+  shareText += '\n\n';
+  
+  // Add emoji grid representation of guesses
+  gameState.guesses.forEach(guess => {
+    const eraMatch = isMatch(guess, 'era') ? '🟩' : '⬜';
+    const nationalityMatch = isMatch(guess, 'nationality') ? '🟩' : '⬜';
+    const yearBornMatch = isMatch(guess, 'yearBorn') ? '🟩' : '⬜';
+    const yearDiedMatch = isMatch(guess, 'yearDied') ? '🟩' : '⬜';
+    const fieldMatch = isMatch(guess, 'field') ? '🟩' : '⬜';
+    
+    shareText += `${eraMatch}${nationalityMatch}${yearBornMatch}${yearDiedMatch}${fieldMatch}\n`;
+  });
+  
+  shareText += '\nPlay at: https://historywordle.me';
+  
+  navigator.clipboard.writeText(shareText)
+    .then(() => alert('Results copied to clipboard!'))
+    .catch(() => alert('Failed to copy results. Please try again.'));
+};
+
+  if (gameState.loading) {
+    return <div className="container">Loading...</div>;
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              pages/index.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="container">
+    <Head>
+      <title>History Wordle</title>
+      <meta name="description" content="Guess the historical figure" />
+      <link rel="icon" href="/favicon.ico" />
+    </Head>
+
+    <main className="main">
+      <h1 className="title">History Wordle</h1>
+      
+      {showInstructions && (
+        <div className="instructions">
+          <p>Guess the mystery historical figure in {gameState.maxGuesses} tries or less!</p>
+          <p>Green cells indicate a match with the mystery figure.</p>
+          <p>For years, arrows indicate if the mystery figure's year is later (↑) or earlier (↓).</p>
+          <button 
+            className="newGameButton" 
+            onClick={() => setShowInstructions(false)}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Got it!
+          </button>
         </div>
+      )}
+      
+      {!gameState.gameOver ? (
+          <>
+           <div className="gameControls">
+              <div className="searchContainer">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={handleSearchChange}
+                  placeholder="Start typing to guess a historical figure..."
+                  className="searchInput"
+                />
+                {filteredFigures.length > 0 && (
+                  <div className="dropdown">
+                    {filteredFigures.map((figure) => (
+                      <div 
+                        key={figure.name} 
+                        className="dropdownItem"
+                        onClick={() => selectFigure(figure)}
+                      >
+                        {figure.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="buttonContainer">
+                <button 
+                  className="guessButton"
+                  onClick={() => {
+                    if (filteredFigures.length > 0) {
+                      selectFigure(filteredFigures[0]);
+                    }
+                  }}
+                  disabled={filteredFigures.length === 0}
+                >
+                  Guess
+                </button>
+                <button 
+                  className="giveUpButton"
+                  onClick={handleGiveUp}
+                  disabled={gameState.guesses.length === 0}
+                >
+                  Give up
+                </button>
+              </div>
+            </div>
+
+            <div className="guessCount">
+              Guesses: {gameState.guesses.length}/{gameState.maxGuesses}
+            </div>
+            <div className="guessesContainer">
+              {gameState.guesses.length > 0 && (
+                <table className="guessTable">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Era</th>
+                      <th>Nationality</th>
+                      <th>Year Born</th>
+                      <th>Year Died</th>
+                      <th>Field</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gameState.guesses.map((guess, index) => (
+                      <tr key={index}>
+                        <td>{guess.name}</td>
+                        <td className={isMatch(guess, 'era') ? "match" : ''}>
+                          {guess.era}
+                        </td>
+                        <td className={isMatch(guess, 'nationality') ? "match" : ''}>
+                          {guess.nationality}
+                        </td>
+                        <td className={isMatch(guess, 'yearBorn') ? "match" : ''}>
+                          {guess.yearBorn < 0 ? `${Math.abs(guess.yearBorn)} BCE` : guess.yearBorn}
+                          {!isMatch(guess, 'yearBorn') && getDirectionalHint(guess, 'yearBorn')}
+                        </td>
+                        <td className={isMatch(guess, 'yearDied') ? "match" : ''}>
+                          {guess.yearDied < 0 ? `${Math.abs(guess.yearDied)} BCE` : guess.yearDied}
+                          {!isMatch(guess, 'yearDied') && getDirectionalHint(guess, 'yearDied')}
+                        </td>
+                        <td className={isMatch(guess, 'field') ? "match" : ''}>
+                          {guess.field}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+         ) : (
+          <div className="gameOverContainer">
+            <h2>The mystery figure was:</h2>
+            <h1 className="mysteryFigureReveal">
+              {gameState.mysteryFigure?.name}
+            </h1>
+            
+            {gameState.won ? (
+              <p>You got it in {gameState.guesses.length} tries!</p>
+            ) : (
+              <p>You {gameState.gaveUp ? 'gave up' : 'ran out of guesses'} after {gameState.guesses.length} guesses.</p>
+            )}
+            
+            <button 
+              className="shareButton"
+              onClick={shareResults}
+            >
+              Share Results
+            </button>
+            
+            <button 
+              className="newGameButton"
+              onClick={handleNewGame}
+            >
+              New Game
+            </button>
+          </div>
+        )}
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      <footer className="footer">
+        <p>History Wordle - Guess historical figures from different eras.</p>
       </footer>
     </div>
   );
