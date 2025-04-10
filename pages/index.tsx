@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
+import SEO from '@/components/SEO';
 
 
 // Dummy data for historical figures
@@ -175,11 +176,7 @@ const shareResults = () => {
 
   return (
     <div className="container">
-    <Head>
-      <title>History Wordle</title>
-      <meta name="description" content="Guess the historical figure" />
-      <link rel="icon" href="/favicon.ico" />
-    </Head>
+    <SEO/>
 
     <main className="main">
       <h1 className="title">History Wordle</h1>
