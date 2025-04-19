@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import SEO from '@/components/SEO';
+import { useAnalytics } from '@/hooks/useAnalytics';
 
 
 // Dummy data for historical figures
@@ -29,6 +30,7 @@ interface GameState {
 }
 
 export default function Home() {
+  const { trackEvent } = useAnalytics();
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredFigures, setFilteredFigures] = useState<typeof dummyFigures>([]);
   const [showInstructions, setShowInstructions] = useState(true);
@@ -82,6 +84,12 @@ export default function Home() {
     setSearchTerm('');
     setFilteredFigures([]);
     
+    // Track the guess activity
+    trackEvent('select_figure', {
+      category: 'game_interaction',
+      label: figure.name,
+    });
+    
     // Check if figure is already guessed
     if (gameState.guesses.some(guess => guess.name === figure.name)) {
       return;
@@ -101,6 +109,12 @@ export default function Home() {
   };
   // Handle give up
   const handleGiveUp = () => {
+    trackEvent('give_up', {
+      category: 'game_interaction',
+      label: gameState.mysteryFigure?.name || 'unknown',
+      value: gameState.guesses.length,
+    });
+    
     setGameState(prev => ({
       ...prev,
       gameOver: true,
@@ -110,6 +124,10 @@ export default function Home() {
 
   // Handle new game
   const handleNewGame = () => {
+    trackEvent('new_game', {
+      category: 'game_interaction',
+    });
+    
     const randomIndex = Math.floor(Math.random() * dummyFigures.length);
     setGameState(prev => ({
       ...prev,
@@ -147,6 +165,12 @@ const getDirectionalHint = (guess: typeof dummyFigures[0], property: 'yearBorn' 
 // Share results
 const shareResults = () => {
   if (!gameState.mysteryFigure) return;
+  
+  trackEvent('share_results', {
+    category: 'social_interaction',
+    label: gameState.mysteryFigure.name,
+    value: gameState.guesses.length,
+  });
   
   let shareText = `History Wordle - ${gameState.mysteryFigure.name}\n`;
   shareText += gameState.won ? `I got it in ${gameState.guesses.length}/${gameState.maxGuesses} guesses!` : 'I gave up!';
