@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import SEO from '@/components/SEO';
 import { useAnalytics } from '@/hooks/useAnalytics';
+import Header from '@/components/Header';
 
 
 // Dummy data for historical figures
@@ -199,11 +200,11 @@ const shareResults = () => {
   }
 
   return (
-    <div className="container">
+    <div className="w-full">
+      <Header/>
     <SEO/>
 
     <main className="main">
-      <h1 className="title">History Wordle</h1>
       
       {showInstructions && (
         <div className="instructions">
